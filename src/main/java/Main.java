@@ -20,19 +20,20 @@ import io.undertow.util.Headers;
 public class Main {
 
     public static void main(final String[] args) {
-        Undertow server = Undertow.builder()
+        Undertow.builder()
             .addHttpListener(8080, "localhost")
-            .setHandler(Main::handleRequest).build();
-        server.start();
+            .setHandler(Main::handleRequest)
+            .build()
+            .start();
     }
 
     private static void handleRequest(HttpServerExchange exchange) {
         exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/plain; charset=UTF-8");
-        exchange.getResponseSender().send(dagensMenyer());
+        exchange.getResponseSender().send(dagensOversikt());
     }
 
-    private static String dagensMenyer() {
-        return menyLenker(getAsString("http://www.google.com/"))
+    private static String dagensOversikt() {
+        return pdfLenker(getAsString("http://www.google.com/"))
             .map(Main::getInputStream)
             .map(Main::pdfToText)
             .map(Main::bareDagens)
@@ -47,7 +48,7 @@ public class Main {
         return null;
     }
 
-    private static Stream<URL> menyLenker(String html) {
+    private static Stream<URL> pdfLenker(String html) {
         return null;
     }
 
@@ -71,12 +72,4 @@ public class Main {
         }
     }
 
-    public static String fetch() throws UnirestException {
-        Unirest.get("http://www.google.com/").asBinary();
-        return "";
-    }
-
-    private static InputStream inputStream(String filename) {
-        return Main.class.getResourceAsStream(filename);
-    }
 }
