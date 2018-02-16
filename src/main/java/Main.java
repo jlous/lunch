@@ -33,8 +33,8 @@ public class Main {
 
     private static String dagensMenyer() {
         return menyLenker(getAsString("http://www.google.com/"))
-            .map(Main::getAsInputStream)
-            .map(Main::toText)
+            .map(Main::getInputStream)
+            .map(Main::pdfToText)
             .map(Main::bareDagens)
             .collect(Collectors.joining());
     }
@@ -43,7 +43,7 @@ public class Main {
         return null;
     }
 
-    private static InputStream getAsInputStream(URL url) {
+    private static InputStream getInputStream(URL url) {
         return null;
     }
 
@@ -59,7 +59,7 @@ public class Main {
         }
     }
 
-    public static String toText(InputStream pdf) {
+    public static String pdfToText(InputStream pdf) {
         try {
             PDFParser parser = new PDFParser(new RandomAccessBufferedFileInputStream(pdf));
             parser.parse();
