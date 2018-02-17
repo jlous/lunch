@@ -1,21 +1,25 @@
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.URL;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-
+import com.mashape.unirest.http.Unirest;
+import com.mashape.unirest.http.exceptions.UnirestException;
+import io.undertow.Undertow;
+import io.undertow.server.HttpServerExchange;
+import io.undertow.util.Headers;
 import org.apache.pdfbox.cos.COSDocument;
 import org.apache.pdfbox.io.RandomAccessBufferedFileInputStream;
 import org.apache.pdfbox.pdfparser.PDFParser;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.select.Elements;
 
-import com.mashape.unirest.http.Unirest;
-import com.mashape.unirest.http.exceptions.UnirestException;
-
-import io.undertow.Undertow;
-import io.undertow.server.HttpServerExchange;
-import io.undertow.util.Headers;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URL;
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.util.Date;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class Main {
 
@@ -27,34 +31,28 @@ public class Main {
             .start();
     }
 
-    private static void handleRequest(HttpServerExchange exchange) {
+    private static void handleRequest(HttpServerExchange exchange) throws IOException {
         exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/plain; charset=UTF-8");
         exchange.getResponseSender().send(dagensOversikt());
     }
 
-    private static String dagensOversikt() {
-        return pdfLenker(getAsString("http://www.google.com/"))
+    private static String dagensOversikt() throws IOException {
+        String site = "https://fs4.m-eating.no";
+        String startUrl = site + "/weekmenu/";
+        Document ukeoversikt = Jsoup.connect(site + "/weekmenu/").get();
+        Elements links = ukeoversikt.select("a");
+        return links.stream()
+            .map(element -> site + element.attr("href"))
             .map(Main::getInputStream)
             .map(Main::pdfToText)
             .map(Main::bareDagens)
+            .map(Main::prettyPrint)
             .collect(Collectors.joining());
     }
 
-    private static String bareDagens(String ukemeny) {
-        return null;
-    }
-
-    private static InputStream getInputStream(URL url) {
-        return null;
-    }
-
-    private static Stream<URL> pdfLenker(String html) {
-        return null;
-    }
-
-    private static String getAsString(String url) {
+    private static InputStream getInputStream(String url) {
         try {
-            return Unirest.get(url).asString().getBody();
+            return Unirest.get(url).asBinary().getBody();
         } catch (UnirestException e) {
             throw new RuntimeException(e);
         }
@@ -70,6 +68,19 @@ public class Main {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private static String bareDagens(String ukemeny) {
+        //TODO: kantinenavn
+        int dayOfWeek = Math.min(5, LocalDate.now().getDayOfWeek().getValue());
+        String[] dager = ukemeny.split("(Mandag|Tirsdag|Onsdag|Torsdag|Fredag)");
+        return dager[dayOfWeek];
+    }
+
+    private static String prettyPrint(String dagens) {
+        //TODO: rekkefølge
+        //TODO: -pris, type
+        return dagens;
     }
 
 }
