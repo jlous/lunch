@@ -14,12 +14,11 @@ import org.jsoup.select.Elements;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URL;
-import java.time.DayOfWeek;
 import java.time.LocalDate;
-import java.util.Date;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 public class Main {
 
@@ -38,16 +37,14 @@ public class Main {
 
     private static String dagensOversikt() throws IOException {
         String site = "https://fs4.m-eating.no";
-        String startUrl = site + "/weekmenu/";
         Document ukeoversikt = Jsoup.connect(site + "/weekmenu/").get();
-        Elements links = ukeoversikt.select("a");
-        return links.stream()
+        Elements relativeLinks = ukeoversikt.select("a");
+        return relativeLinks.stream()
             .map(element -> site + element.attr("href"))
             .map(Main::getInputStream)
             .map(Main::pdfToText)
             .map(Main::bareDagens)
-            .map(Main::prettyPrint)
-            .collect(Collectors.joining());
+            .collect(Collectors.joining("\n"));
     }
 
     private static InputStream getInputStream(String url) {
@@ -58,7 +55,7 @@ public class Main {
         }
     }
 
-    public static String pdfToText(InputStream pdf) {
+    private static String pdfToText(InputStream pdf) {
         try {
             PDFParser parser = new PDFParser(new RandomAccessBufferedFileInputStream(pdf));
             parser.parse();
@@ -71,16 +68,26 @@ public class Main {
     }
 
     private static String bareDagens(String ukemeny) {
-        //TODO: kantinenavn
+        String[] avsnitt = ukemeny.split("(Mandag|Tirsdag|Onsdag|Torsdag|Fredag)");
+        String tittel = avsnitt[0].split("\n")[1];
         int dayOfWeek = Math.min(5, LocalDate.now().getDayOfWeek().getValue());
-        String[] dager = ukemeny.split("(Mandag|Tirsdag|Onsdag|Torsdag|Fredag)");
-        return dager[dayOfWeek];
+        return tittel + "\n" + prettyPrint(avsnitt[dayOfWeek]);
     }
 
     private static String prettyPrint(String dagens) {
-        //TODO: rekkefølge
-        //TODO: -pris, type
-        return dagens;
+        List<String> lines = Arrays.asList((dagens.trim().split("\\w+:")));
+        Collections.reverse(lines);
+        return lines.stream()
+            .map(s -> s
+                .replace("\n", "")
+                .replaceAll(" kr ", "")
+                .replaceAll("[0-9],?", "")
+                .replace("/hg", "")
+                .replace("/", "")
+                .replace(";", "")
+            )
+            .filter(s -> !s.trim().isEmpty())
+            .collect(Collectors.joining("\n"));
     }
 
 }
