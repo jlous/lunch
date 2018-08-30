@@ -72,15 +72,15 @@ public class Main {
     }
 
     private static String dagens(String ukemeny, String ukedag, String kantine, String tittel) {
-        int cursor;
-        cursor = StringUtils.indexOfIgnoreCase(ukemeny, kantine);
-        cursor = StringUtils.indexOfIgnoreCase(ukemeny, ukedag, cursor);
+        int startOfKantine = StringUtils.indexOfIgnoreCase(ukemeny, kantine);
+        int startOfUkedag = StringUtils.indexOfIgnoreCase(ukemeny, ukedag, startOfKantine);
         String dagens;
-        if (cursor == -1) {
+        if (startOfKantine == -1 || startOfUkedag == -1) {
             dagens = "  Stengt";
         } else {
-            cursor = ukemeny.indexOf("\n", cursor) + 1;
-            dagens = prettyPrint(ukemeny.substring(cursor, ukemeny.indexOf("\n\n", cursor)));
+            int startOfDagens = ukemeny.indexOf("\n", startOfUkedag) + 1;
+            int endOfDagens = ukemeny.indexOf("\n\n", startOfDagens);
+            dagens = prettyPrint(ukemeny.substring(startOfDagens, endOfDagens));
         }
         return tittel + "\n" + dagens;
     }
@@ -93,12 +93,11 @@ public class Main {
                 .replaceAll("\\n", " ")
                 .replaceAll("(?i)\\bkr(\\b|\\d).*", "")
                 .replaceAll(" +", " ")
-                .replaceAll("^ ", "")
-                .replaceAll(" $", "")
+                .trim()
             )
+            .filter(s -> !s.isEmpty())
             .map(StringUtils::capitalize)
             .map(s -> "  " + s)
-            .filter(s -> !s.trim().isEmpty())
             .collect(Collectors.joining("\n"));
     }
 
