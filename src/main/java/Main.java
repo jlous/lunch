@@ -1,8 +1,16 @@
-import com.mashape.unirest.http.Unirest;
-import com.mashape.unirest.http.exceptions.UnirestException;
-import io.undertow.Undertow;
-import io.undertow.server.HttpServerExchange;
-import io.undertow.util.Headers;
+import java.io.IOException;
+import java.io.InputStream;
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.format.TextStyle;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Locale;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+import org.apache.commons.lang3.StringUtils;
 import org.apache.pdfbox.cos.COSDocument;
 import org.apache.pdfbox.io.RandomAccessBufferedFileInputStream;
 import org.apache.pdfbox.pdfparser.PDFParser;
@@ -10,15 +18,15 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.time.LocalDate;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.stream.Collectors;
+import com.mashape.unirest.http.Unirest;
+import com.mashape.unirest.http.exceptions.UnirestException;
+
+import io.undertow.Undertow;
+import io.undertow.server.HttpServerExchange;
+import io.undertow.util.Headers;
 
 public class Main {
 
@@ -35,27 +43,66 @@ public class Main {
         exchange.getResponseSender().send(dagensOversikt());
     }
 
-    private static String dagensOversikt() throws IOException {
+    static String dagensOversikt() throws IOException {
         String site = "https://fs4.m-eating.no";
-        Document ukeoversikt = Jsoup.connect(site + "/weekmenu/").get();
+        String landingUrl = site + "/weekmenu/";
+
+        Document ukeoversikt = Jsoup.connect(landingUrl).get();
         Elements relativeLinks = ukeoversikt.select("a");
         return relativeLinks.stream()
-            .map(element -> site + element.attr("href"))
+            .map(resolveUrl(site))
             .map(Main::getInputStream)
             .map(Main::pdfToText)
-            .map(Main::bareDagens)
+            .map(bareDagens(LocalDate.now()))
             .collect(Collectors.joining("\n"));
     }
 
-    private static InputStream getInputStream(String url) {
-        try {
-            return Unirest.get(url).asBinary().getBody();
-        } catch (UnirestException e) {
-            throw new RuntimeException(e);
-        }
+    private static Function<Element, String> resolveUrl(String site) {
+        return element -> site + element.attr("href");
     }
 
-    private static String pdfToText(InputStream pdf) {
+    private static Function<String, String> bareDagens(LocalDate iDag) {
+        return ukemeny -> bareDagens(ukemeny, iDag.getDayOfWeek());
+    }
+
+    static String bareDagens(String ukemeny, DayOfWeek ukedag) {
+        String dagNavn = ukedag.getDisplayName(TextStyle.FULL, Locale.forLanguageTag("no"));
+        return dagens(ukemeny, dagNavn, "Kronen", "2.") + "\n"
+            + dagens(ukemeny, dagNavn, "Bonusen", "1.");
+    }
+
+    private static String dagens(String ukemeny, String ukedag, String kantine, String tittel) {
+        int cursor;
+        cursor = StringUtils.indexOfIgnoreCase(ukemeny, kantine);
+        cursor = StringUtils.indexOfIgnoreCase(ukemeny, ukedag, cursor);
+        String dagens;
+        if (cursor == -1) {
+            dagens = "  Stengt";
+        } else {
+            cursor = ukemeny.indexOf("\n", cursor) + 1;
+            dagens = prettyPrint(ukemeny.substring(cursor, ukemeny.indexOf("\n\n", cursor)));
+        }
+        return tittel + "\n" + dagens;
+    }
+
+    static String prettyPrint(String dagens) {
+        List<String> retter = Arrays.asList((dagens.trim().split("\\w+:")));
+        Collections.reverse(retter);
+        return retter.stream()
+            .map(s -> s
+                .replaceAll("\\n", " ")
+                .replaceAll("(?i)\\bkr(\\b|\\d).*", "")
+                .replaceAll(" +", " ")
+                .replaceAll("^ ", "")
+                .replaceAll(" $", "")
+            )
+            .map(StringUtils::capitalize)
+            .map(s -> "  " + s)
+            .filter(s -> !s.trim().isEmpty())
+            .collect(Collectors.joining("\n"));
+    }
+
+    static String pdfToText(InputStream pdf) {
         try {
             PDFParser parser = new PDFParser(new RandomAccessBufferedFileInputStream(pdf));
             parser.parse();
@@ -67,27 +114,12 @@ public class Main {
         }
     }
 
-    private static String bareDagens(String ukemeny) {
-        String[] avsnitt = ukemeny.split("(Mandag|Tirsdag|Onsdag|Torsdag|Fredag)");
-        String tittel = avsnitt[0].split("\n")[1];
-        int dayOfWeek = Math.min(5, LocalDate.now().getDayOfWeek().getValue());
-        return tittel + "\n" + prettyPrint(avsnitt[dayOfWeek]);
-    }
-
-    private static String prettyPrint(String dagens) {
-        List<String> lines = Arrays.asList((dagens.trim().split("\\w+:")));
-        Collections.reverse(lines);
-        return lines.stream()
-            .map(s -> s
-                .replace("\n", "")
-                .replaceAll(" kr ", "")
-                .replaceAll("[0-9],?", "")
-                .replace("/hg", "")
-                .replace("/", "")
-                .replace(";", "")
-            )
-            .filter(s -> !s.trim().isEmpty())
-            .collect(Collectors.joining("\n"));
+    static InputStream getInputStream(String url) {
+        try {
+            return Unirest.get(url).asBinary().getBody();
+        } catch (UnirestException e) {
+            throw new RuntimeException(e);
+        }
     }
 
 }
